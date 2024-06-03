@@ -76,10 +76,15 @@ def main():
     args = parser.parse_args()
 
     material_index_images = glob.glob(os.path.join(args.image_path, '*', '*_material_index_output_0000.png'))
+    material_index_images.sort()
     dirs = [os.path.dirname(image) for image in material_index_images]
 
     for index, dir in tqdm(enumerate(dirs), total=len(dirs)):
-        
+
+        index = int(os.path.basename(material_index_images[index])[:3])
+
+        alpha = cv2.imread(os.path.join(dir, f'{index:03d}' + '.png'), cv2.IMREAD_UNCHANGED)[..., 3] / 255.0
+
         # Map material index to corresponding brdf
 
         image = cv2.imread(os.path.join(dir, f'{index:03d}' + '_material_index_output_0000.png'), cv2.IMREAD_UNCHANGED)[:, :, :3]
@@ -91,25 +96,35 @@ def main():
 
         remapped_image = image[:, :, 0]
 
-        albedo_image = np.zeros((image.shape[0], image.shape[1], 3), dtype=np.uint8)
-        roughness_image = np.zeros((image.shape[0], image.shape[1]), dtype=np.uint8)
-        metallic_image = np.zeros((image.shape[0], image.shape[1]), dtype=np.uint8)
+        albedo_image = np.zeros((image.shape[0], image.shape[1], 3), dtype=np.float16)
+        roughness_image = np.zeros((image.shape[0], image.shape[1]), dtype=np.float16)
+        metallic_image = np.zeros((image.shape[0], image.shape[1]), dtype=np.float16)
 
         for (i, material) in enumerate(MATERIALS):
             mask = (remapped_image == i + 1)
-            albedo_image[mask] = (material.color * 255).astype(np.uint8)
-            roughness_image[mask] = int(material.roughness * 255)
-            metallic_image[mask] = int(material.metallic * 255)
+            albedo_image[mask] = material.color
+            roughness_image[mask] = material.roughness
+            metallic_image[mask] = material.metallic
         
+        # remap [0, 1] to [0.3, 1]
+        albedo_image = (albedo_image * 0.7 + 0.3) * alpha[..., None]
+        roughness_image = (roughness_image * 0.7 + 0.3) * alpha
+        metallic_image = (metallic_image * 0.7 + 0.3) * alpha
+
+        albedo_image = (albedo_image * 255).astype(np.uint8)
+        roughness_image = (roughness_image * 255).astype(np.uint8)
+        metallic_image = (metallic_image * 255).astype(np.uint8)
+
         albedo_image = cv2.cvtColor(albedo_image, cv2.COLOR_RGB2BGR)
         cv2.imwrite(os.path.join(dir, f'{index:03d}_albedo.png'), albedo_image)
         cv2.imwrite(os.path.join(dir, f'{index:03d}_roughness.png'), roughness_image)
         cv2.imwrite(os.path.join(dir, f'{index:03d}_metallic.png'), metallic_image)
 
-        os.remove(os.path.join(dir, f'{index:03d}_material_index_output_0000.png'))
+        # os.remove(os.path.join(dir, f'{index:03d}_material_index_output_0000.png'))
 
         # Rename normal output
-        os.rename(os.path.join(dir, f'{index:03d}_normal_output_0000.png'), os.path.join(dir, f'{index:03d}_normal.png'))
+        if os.path.exists(os.path.join(dir, f'{index:03d}_normal_output_0000.png')):
+            os.rename(os.path.join(dir, f'{index:03d}_normal_output_0000.png'), os.path.join(dir, f'{index:03d}_normal.png'))
 
 if __name__ == "__main__":
     main()

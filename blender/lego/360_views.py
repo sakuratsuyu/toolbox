@@ -9,7 +9,7 @@ import math
 
 DEBUG = False
             
-VIEWS = 100
+VIEWS = 1
 RESOLUTION = 800
 RESULTS_PATH = f'images_{VIEWS:03d}'
 DEPTH_SCALE = 1.4
@@ -74,20 +74,22 @@ if not DEBUG:
 
         #     links.new(map.outputs[0], depth_file_output.inputs[0])
 
-        set_alpha = tree.nodes.new(type="CompositorNodeSetAlpha")
-        links.new(render_layers.outputs['Normal'], set_alpha.inputs[0])
-        links.new(render_layers.outputs['Alpha'], set_alpha.inputs[1])
+        alpha_file_output = tree.nodes.new(type="CompositorNodeOutputFile")
+        alpha_file_output.name = 'alpha_output'
+        links.new(render_layers.outputs['Alpha'], alpha_file_output.inputs[0])
+        gbuffer_output['alpha'] = alpha_file_output
+
         normal_file_output = tree.nodes.new(type="CompositorNodeOutputFile")
         normal_file_output.name = 'normal_output'
-        links.new(set_alpha.outputs[0], normal_file_output.inputs[0])
+        links.new(render_layers.outputs['Normal'], normal_file_output.inputs[0])
         gbuffer_output['normal'] = normal_file_output
 
         division = tree.nodes.new(type="CompositorNodeMath")
         division.operation = 'DIVIDE'
         links.new(render_layers.outputs['IndexMA'], division.inputs[0])
         division.inputs[1].default_value = 255.0
-        anti_aliasing = tree.nodes.new(type="CompositorNodeAntiAliasing")
-        links.new(division.outputs[0], anti_aliasing.inputs[0])
+        # anti_aliasing = tree.nodes.new(type="CompositorNodeAntiAliasing")
+        # links.new(division.outputs[0], anti_aliasing.inputs[0])
         # set_alpha = tree.nodes.new(type="CompositorNodeSetAlpha")
         # links.new(anti_aliasing.outputs[0], set_alpha.inputs[0])
         # links.new(render_layers.outputs['Alpha'], set_alpha.inputs[1])
