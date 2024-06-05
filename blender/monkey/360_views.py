@@ -21,7 +21,7 @@ RESULTS_PATH = f'images_{VIEWS:03d}'
 DEPTH_SCALE = 1.4
 COLOR_DEPTH = 8
 FORMAT = 'PNG'
-RANDOM_VIEWS = False
+RANDOM_VIEWS = True
 UPPER_VIEWS = True
 
 scene = bpy.context.scene
@@ -66,7 +66,7 @@ def parent_obj_to_camera(b_camera):
     return b_empty
 
 cam = scene.objects['Camera']
-cam.location = (0, 6.0, 0.0)
+cam.location = (0, 5.0, 0.0)
 if cam.constraints.find("Track To") == -1:
     cam_constraint = cam.constraints.new(type='TRACK_TO')
     cam_constraint.track_axis = 'TRACK_NEGATIVE_Z'
@@ -145,7 +145,6 @@ for i in range(0, VIEWS):
         b_empty.rotation_euler[2] += math.radians(stepsize)
         rot = b_empty.rotation_euler
 
-
     scene.render.filepath = os.path.join(save_path, f'{i:03d}', f'{i:03d}_normal')
     alpha_file_output.file_slots[0].path = os.path.join(f'{i:03d}', f'{i:03d}' + "_" + alpha_file_output.name + "_")
     if DEBUG:
@@ -178,26 +177,46 @@ nodes.remove(alpha_file_output)
 
 # Render light direction map
 ## Add light direction shader link
-direction_output_link = shader_links.new(script.outputs[0], material_output_input)
+# direction_output_link = shader_links.new(script.outputs[0], material_output_input)
+
+# for i in range(0, VIEWS):
+#     b_empty.rotation_euler = out_data['frames'][i]['rotation']
+
+#     scene.render.filepath = os.path.join(save_path, f'{i:03d}', f'{i:03d}_direction')
+#     if DEBUG:
+#         break
+#     else:
+#         bpy.ops.render.render(write_still=True)  # render still
+
+# ## Remove shader link
+# shader_links.remove(direction_output_link)
+
+
+# Render viewdir map
+## Add viewdir link
+viewdir_output_link = shader_links.new(script.outputs[2], material_output_input)
 
 for i in range(0, VIEWS):
     b_empty.rotation_euler = out_data['frames'][i]['rotation']
 
-    scene.render.filepath = os.path.join(save_path, f'{i:03d}', f'{i:03d}_direction')
+    scene.render.filepath = os.path.join(save_path, f'{i:03d}', f'{i:03d}_viewdir')
     if DEBUG:
         break
     else:
         bpy.ops.render.render(write_still=True)  # render still
 
 ## Remove shader link
-shader_links.remove(direction_output_link)
+# shader_links.remove(operation_input0_link)
+# shader_links.remove(operation_input1_link)
+shader_links.remove(viewdir_output_link)
 
 
 # Render albedo map
 ## Add albedo shader link
-operation_input0_link = shader_links.new(albedo.outputs[0], operation.inputs[0])
-operation_input1_link = shader_links.new(script.outputs[1], operation.inputs[1])
-albedo_output_link = shader_links.new(operation.outputs[0], material_output_input)
+# operation_input0_link = shader_links.new(albedo.outputs[0], operation.inputs[0])
+# operation_input1_link = shader_links.new(script.outputs[1], operation.inputs[1])
+# albedo_output_link = shader_links.new(operation.outputs[0], material_output_input)
+albedo_output_link = shader_links.new(albedo.outputs[0], material_output_input)
 
 for i in range(0, VIEWS):
     b_empty.rotation_euler = out_data['frames'][i]['rotation']
@@ -209,16 +228,17 @@ for i in range(0, VIEWS):
         bpy.ops.render.render(write_still=True)  # render still
 
 ## Remove shader link
-shader_links.remove(operation_input0_link)
-shader_links.remove(operation_input1_link)
+# shader_links.remove(operation_input0_link)
+# shader_links.remove(operation_input1_link)
 shader_links.remove(albedo_output_link)
 
 
 # Render roughness map
 ## Add roughness shader link
-operation_input0_link = shader_links.new(roughness.outputs[0], operation.inputs[0])
-operation_input1_link = shader_links.new(script.outputs[1], operation.inputs[1])
-roughness_output_link = shader_links.new(operation.outputs[0], material_output_input)
+# operation_input0_link = shader_links.new(roughness.outputs[0], operation.inputs[0])
+# operation_input1_link = shader_links.new(script.outputs[1], operation.inputs[1])
+# roughness_output_link = shader_links.new(operation.outputs[0], material_output_input)
+roughness_output_link = shader_links.new(roughness.outputs[0], material_output_input)
 
 for i in range(0, VIEWS):
     b_empty.rotation_euler = out_data['frames'][i]['rotation']
@@ -230,6 +250,6 @@ for i in range(0, VIEWS):
         bpy.ops.render.render(write_still=True)  # render still
 
 ## Remove shader link
-shader_links.remove(operation_input0_link)
-shader_links.remove(operation_input1_link)
+# shader_links.remove(operation_input0_link)
+# shader_links.remove(operation_input1_link)
 shader_links.remove(roughness_output_link)
