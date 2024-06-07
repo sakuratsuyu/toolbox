@@ -15,13 +15,14 @@ def listify_matrix(matrix):
 
 DEBUG = False
 
+TAG = "0002"
 VIEWS = 100
 RESOLUTION = 800
 RESULTS_PATH = f'images_{VIEWS:03d}'
 DEPTH_SCALE = 1.4
 COLOR_DEPTH = 8
 FORMAT = 'PNG'
-RANDOM_VIEWS = True
+RANDOM_VIEWS = False
 UPPER_VIEWS = True
 
 scene = bpy.context.scene
@@ -87,9 +88,9 @@ shader_nodes = shader_tree.nodes
 for node in shader_nodes:
     if node.label == "Base Color":
         albedo = node
-    if node.label == "Map Range":
+    if node.label == "Roughness Map Range":
         roughness = node
-    if node.label == "Surface Normal":
+    if node.label == "Normal Map Range":
         normal = node
     if node.label == "Script":
         script = node
@@ -115,12 +116,97 @@ if not DEBUG:
     alpha_file_output = nodes.new(type="CompositorNodeOutputFile")
     alpha_file_output.name = 'alpha_output'
     alpha_link = links.new(render_layers.outputs['Alpha'], alpha_file_output.inputs[0])
-
     alpha_file_output.base_path = save_path
+
+    normal_file_output = nodes.new(type="CompositorNodeOutputFile")
+    normal_file_output.name = 'normal_output'
+    normal_file_output.format.file_format = 'OPEN_EXR'
+    normal_link = links.new(render_layers.outputs['Normal'], normal_file_output.inputs[0])
+    normal_file_output.base_path = save_path
+
+    image_file_output = nodes.new(type="CompositorNodeOutputFile")
+    image_file_output.name = 'image_output'
+    image_file_output.format.file_format = 'OPEN_EXR'
+    image_link = links.new(render_layers.outputs['Image'], image_file_output.inputs[0])
+    image_file_output.base_path = save_path
 
 
 ## Add normal shader link
-normal_output_link = shader_links.new(normal.outputs[0], material_output_input)
+# normal_output_link = shader_links.new(normal.outputs[1], material_output_input)
+
+# ## Data to store in JSON file
+# out_data = {
+#     'camera_angle_x': bpy.data.objects['Camera'].data.angle_x,
+#     'frames': []
+# }
+
+# for i in range(0, VIEWS):
+#     os.makedirs(os.path.join(save_path, f'{i:03d}'), exist_ok=True)
+
+#     if RANDOM_VIEWS:
+#         if UPPER_VIEWS:
+#             rot = np.random.uniform(0, 1, size=3) * (1, 0, 2 * np.pi)
+#             rot[0] = np.abs(np.arccos(1 - 2 * rot[0]) - np.pi / 2)
+#             b_empty.rotation_euler = rot
+#         else:
+#             rot = np.random.uniform(0, 2 * np.pi, size=3)
+#             b_empty.rotation_euler = rot
+#     else:
+#         # print("Rotation {}, {}".format((stepsize * i), math.radians(stepsize * i)))
+#         # scene.render.filepath = os.path.join(save_path, f'{i:03d}', f'{int(i * stepsize):03d}')
+#         b_empty.rotation_euler[2] += math.radians(stepsize)
+#         rot = b_empty.rotation_euler
+
+#     scene.render.filepath = os.path.join(save_path, f'{i:03d}', f'{i:03d}_normal')
+#     alpha_file_output.file_slots[0].path = os.path.join(f'{i:03d}', f'{i:03d}' + "_" + alpha_file_output.name + "_")
+#     if DEBUG:
+#         break
+#     else:
+#         bpy.ops.render.render(write_still=True)  # render still
+#     TAG = "0002"
+#     os.rename(os.path.join(save_path, f'{i:03d}', f'{i:03d}' + "_" + alpha_file_output.name + "_" + TAG + ".png"),
+#               os.path.join(save_path, f'{i:03d}', f'{i:03d}' + "_alpha" + ".png"))
+
+#     frame_data = {
+#         'file_path': os.path.relpath(scene.render.filepath, start=save_path),
+#         'rotation': [rot[0], rot[1], rot[2]],
+#         'transform_matrix': listify_matrix(cam.matrix_world)
+#     }
+#     out_data['frames'].append(frame_data)
+
+# if not DEBUG:
+#     with open(save_path + '/' + 'transforms.json', 'w') as out_file:
+#         json.dump(out_data, out_file, indent=4)
+
+
+# ## Remove shader link
+# # shader_links.remove(normal_output_link)
+# ## Remove compositor links and nodes
+# links.remove(alpha_link)
+# nodes.remove(render_layers)
+# nodes.remove(alpha_file_output)
+
+
+# Render light direction map
+## Add light direction shader link
+# direction_output_link = shader_links.new(script.outputs[0], material_output_input)
+
+# for i in range(0, VIEWS):
+#     b_empty.rotation_euler = out_data['frames'][i]['rotation']
+
+#     scene.render.filepath = os.path.join(save_path, f'{i:03d}', f'{i:03d}_direction')
+#     if DEBUG:
+#         break
+#     else:
+#         bpy.ops.render.render(write_still=True)  # render still
+
+# ## Remove shader link
+# shader_links.remove(direction_output_link)
+
+
+# Render viewdir map
+## Add viewdir link
+viewdir_output_link = shader_links.new(script.outputs[2], material_output_input)
 
 ## Data to store in JSON file
 out_data = {
@@ -145,15 +231,22 @@ for i in range(0, VIEWS):
         b_empty.rotation_euler[2] += math.radians(stepsize)
         rot = b_empty.rotation_euler
 
-    scene.render.filepath = os.path.join(save_path, f'{i:03d}', f'{i:03d}_normal')
+    scene.render.filepath = os.path.join(save_path, f'{i:03d}', f'{i:03d}')
     alpha_file_output.file_slots[0].path = os.path.join(f'{i:03d}', f'{i:03d}' + "_" + alpha_file_output.name + "_")
+    normal_file_output.file_slots[0].path = os.path.join(f'{i:03d}', f'{i:03d}' + "_" + normal_file_output.name + "_")
+    image_file_output.file_slots[0].path = os.path.join(f'{i:03d}', f'{i:03d}' + "_" + "viewdir" + "_")
+
     if DEBUG:
         break
     else:
         bpy.ops.render.render(write_still=True)  # render still
-    TAG = "0002"
+        
     os.rename(os.path.join(save_path, f'{i:03d}', f'{i:03d}' + "_" + alpha_file_output.name + "_" + TAG + ".png"),
               os.path.join(save_path, f'{i:03d}', f'{i:03d}' + "_alpha" + ".png"))
+    os.rename(os.path.join(save_path, f'{i:03d}', f'{i:03d}' + "_" + normal_file_output.name + "_" + TAG + ".exr"),
+              os.path.join(save_path, f'{i:03d}', f'{i:03d}' + "_normal" + ".exr"))
+    os.rename(os.path.join(save_path, f'{i:03d}', f'{i:03d}' + "_" + "viewdir" + "_" + TAG + ".exr"),
+              os.path.join(save_path, f'{i:03d}', f'{i:03d}' + "_viewdir" + ".exr"))
 
     frame_data = {
         'file_path': os.path.relpath(scene.render.filepath, start=save_path),
@@ -166,49 +259,13 @@ if not DEBUG:
     with open(save_path + '/' + 'transforms.json', 'w') as out_file:
         json.dump(out_data, out_file, indent=4)
 
-
 ## Remove shader link
-shader_links.remove(normal_output_link)
+shader_links.remove(viewdir_output_link)
 ## Remove compositor links and nodes
 links.remove(alpha_link)
-nodes.remove(render_layers)
+links.remove(normal_link)
 nodes.remove(alpha_file_output)
-
-
-# Render light direction map
-## Add light direction shader link
-# direction_output_link = shader_links.new(script.outputs[0], material_output_input)
-
-# for i in range(0, VIEWS):
-#     b_empty.rotation_euler = out_data['frames'][i]['rotation']
-
-#     scene.render.filepath = os.path.join(save_path, f'{i:03d}', f'{i:03d}_direction')
-#     if DEBUG:
-#         break
-#     else:
-#         bpy.ops.render.render(write_still=True)  # render still
-
-# ## Remove shader link
-# shader_links.remove(direction_output_link)
-
-
-# Render viewdir map
-## Add viewdir link
-viewdir_output_link = shader_links.new(script.outputs[2], material_output_input)
-
-for i in range(0, VIEWS):
-    b_empty.rotation_euler = out_data['frames'][i]['rotation']
-
-    scene.render.filepath = os.path.join(save_path, f'{i:03d}', f'{i:03d}_viewdir')
-    if DEBUG:
-        break
-    else:
-        bpy.ops.render.render(write_still=True)  # render still
-
-## Remove shader link
-# shader_links.remove(operation_input0_link)
-# shader_links.remove(operation_input1_link)
-shader_links.remove(viewdir_output_link)
+nodes.remove(normal_file_output)
 
 
 # Render albedo map
@@ -221,11 +278,14 @@ albedo_output_link = shader_links.new(albedo.outputs[0], material_output_input)
 for i in range(0, VIEWS):
     b_empty.rotation_euler = out_data['frames'][i]['rotation']
 
-    scene.render.filepath = os.path.join(save_path, f'{i:03d}', f'{i:03d}_albedo')
+    scene.render.filepath = os.path.join(save_path, f'{i:03d}', f'{i:03d}')
+    image_file_output.file_slots[0].path = os.path.join(f'{i:03d}', f'{i:03d}' + "_" + "albedo" + "_")
     if DEBUG:
         break
     else:
         bpy.ops.render.render(write_still=True)  # render still
+    os.rename(os.path.join(save_path, f'{i:03d}', f'{i:03d}' + "_" + "albedo" + "_" + TAG + ".exr"),
+              os.path.join(save_path, f'{i:03d}', f'{i:03d}' + "_albedo" + ".exr"))
 
 ## Remove shader link
 # shader_links.remove(operation_input0_link)
@@ -243,13 +303,24 @@ roughness_output_link = shader_links.new(roughness.outputs[0], material_output_i
 for i in range(0, VIEWS):
     b_empty.rotation_euler = out_data['frames'][i]['rotation']
 
-    scene.render.filepath = os.path.join(save_path, f'{i:03d}', f'{i:03d}_roughness')
+    scene.render.filepath = os.path.join(save_path, f'{i:03d}', f'{i:03d}')
+    image_file_output.file_slots[0].path = os.path.join(f'{i:03d}', f'{i:03d}' + "_" + "roughness" + "_")
     if DEBUG:
         break
     else:
         bpy.ops.render.render(write_still=True)  # render still
+    os.rename(os.path.join(save_path, f'{i:03d}', f'{i:03d}' + "_" + "roughness" + "_" + TAG + ".exr"),
+              os.path.join(save_path, f'{i:03d}', f'{i:03d}' + "_roughness" + ".exr"))
+    
+    os.remove(os.path.join(save_path, f'{i:03d}', f'{i:03d}' + '.png'))
+
 
 ## Remove shader link
 # shader_links.remove(operation_input0_link)
 # shader_links.remove(operation_input1_link)
 shader_links.remove(roughness_output_link)
+
+## Remove image compositor links and nodes
+links.remove(image_link)
+nodes.remove(image_file_output)
+nodes.remove(render_layers)
