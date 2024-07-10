@@ -16,13 +16,13 @@ def listify_matrix(matrix):
 DEBUG = False
 
 TAG = "0000"
-VIEWS = 5
+VIEWS = 100
 RESOLUTION = 800
 RESULTS_PATH = f'images_{VIEWS:03d}'
 DEPTH_SCALE = 1.4
 COLOR_DEPTH = 8
 FORMAT = 'PNG'
-RANDOM_VIEWS = False
+RANDOM_VIEWS = True
 UPPER_VIEWS = True
 
 scene = bpy.context.scene
@@ -45,7 +45,7 @@ nodes = tree.nodes
 
 scene.frame_start = 0
 scene.frame_end = VIEWS - 1
-
+scene.render.filepath = os.path.join(save_path, 'image_')
 
 # Add passes for additionally dumping albedo and normals.
 scene.render.image_settings.file_format = str(FORMAT)
@@ -456,4 +456,4 @@ nodes.remove(image_file_output)
 nodes.remove(render_layers)
 
 for i in range(0, VIEWS):
-    os.remove(os.path.join(save_path, f'{i:04d}.png'))
+    os.remove(os.path.join(save_path, f'image_{i:04d}.png'))
