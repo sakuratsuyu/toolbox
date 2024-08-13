@@ -5,6 +5,7 @@ import os
 import json
 import bpy
 import numpy as np
+import mathutils
 import math
 
 def listify_matrix(matrix):
@@ -16,13 +17,13 @@ def listify_matrix(matrix):
 DEBUG = False
 
 TAG = "0000"
-VIEWS = 100
+VIEWS = 5
 RESOLUTION = 800
 RESULTS_PATH = f'images_{VIEWS:03d}'
 DEPTH_SCALE = 1.4
 COLOR_DEPTH = 8
 FORMAT = 'PNG'
-RANDOM_VIEWS = True
+RANDOM_VIEWS = False
 UPPER_VIEWS = True
 
 scene = bpy.context.scene
@@ -72,7 +73,7 @@ def parent_obj_to_camera(b_camera):
     return b_empty
 
 cam = scene.objects['Camera']
-cam.location = (0, 5.0, 0.0)
+cam.location = (0, 4.0, 0.0)
 if cam.constraints.find("Track To") == -1:
     cam_constraint = cam.constraints.new(type='TRACK_TO')
     cam_constraint.track_axis = 'TRACK_NEGATIVE_Z'
@@ -99,6 +100,13 @@ if not DEBUG:
     alpha_file_output.base_path = save_path
     alpha_file_output.file_slots[0].path = 'alpha_'
 
+    depth_file_output = nodes.new(type="CompositorNodeOutputFile")
+    depth_file_output.name = 'depth_output'
+    depth_file_output.format.file_format = 'OPEN_EXR'
+    depth_link = links.new(render_layers.outputs['Depth'], depth_file_output.inputs[0])
+    depth_file_output.base_path = save_path
+    depth_file_output.file_slots[0].path = 'depth_'
+
     normal_file_output = nodes.new(type="CompositorNodeOutputFile")
     normal_file_output.name = 'normal_output'
     normal_file_output.format.file_format = 'OPEN_EXR'
@@ -121,14 +129,14 @@ if not DEBUG:
     image_file_output.file_slots[0].path = 'image_'
 
 
-## Data to store in JSON file
+# Data to store in JSON file
 out_data = {
     'camera_angle_x': bpy.data.objects['Camera'].data.angle_x,
     'frames': []
 }
 
 for i in range(0, VIEWS):
-    os.makedirs(os.path.join(save_path, f'{i:03d}'), exist_ok=True)
+    # os.makedirs(os.path.join(save_path, f'{i:03d}'), exist_ok=True)
 
     if RANDOM_VIEWS:
         if UPPER_VIEWS:
@@ -137,8 +145,10 @@ for i in range(0, VIEWS):
         else:
             rot = np.random.uniform(0, 2 * np.pi, size=3)
     else:
-        rot = [math.radians(30
-        ), 0, math.radians(stepsize * i)]
+        if i == 0:
+            rot = [math.radians(90), 0, 0]
+        else:
+            rot = [0, 0, math.radians(stepsize * i)]
 
     b_empty.rotation_euler = rot
     b_empty.keyframe_insert(data_path="rotation_euler", index=-1, frame=i)
@@ -149,6 +159,34 @@ for i in range(0, VIEWS):
         'transform_matrix': listify_matrix(cam.matrix_world),
     }
     out_data['frames'].append(frame_data)
+
+
+if not DEBUG:
+    with open(save_path + '/' + 'transforms.json', 'w') as out_file:
+        json.dump(out_data, out_file, indent=4)
+
+# load config
+# with open(os.path.join(save_path, 'transforms.json')) as out_file:
+#     out_data = json.load(out_file)
+# frames = out_data['frames']
+
+# out_data = {
+#     'camera_angle_x': bpy.data.objects['Camera'].data.angle_x,
+#     'frames': []
+# }
+# for i in range(0, VIEWS):
+    
+#     cam.matrix_world = mathutils.Matrix(frames[i]['transform_matrix'])
+#     cam.keyframe_insert(data_path="location", index=-1, frame=i)
+#     cam.keyframe_insert(data_path="rotation_euler", index=-1, frame=i)
+
+#     bpy.context.scene.frame_set(i)
+
+#     frame_data = {
+#         'file_path': os.path.join(f'{i:03d}', f'{i:03d}'),
+#         'transform_matrix': listify_matrix(cam.matrix_world),
+#     }
+#     out_data['frames'].append(frame_data)
 
 
 if not DEBUG:
@@ -192,6 +230,7 @@ for material in materials:
     material_links.append(shader_links.new(brdf.outputs[0], material_output_input))
 
 image_file_output.file_slots[0].path = 'render_'
+image_file_output.format.file_format = 'PNG'
 bpy.ops.render.render(animation=True)
 
 # for i in range(0, VIEWS):
@@ -236,9 +275,11 @@ for material in materials:
 
 ## Remove compositor links and nodes
 links.remove(alpha_link)
+links.remove(depth_link)
 links.remove(normal_link)
 links.remove(position_link)
 nodes.remove(alpha_file_output)
+nodes.remove(depth_file_output)
 nodes.remove(normal_file_output)
 nodes.remove(position_file_output)
 
@@ -273,6 +314,7 @@ for material in materials:
     material_links.append(shader_links.new(albedo.outputs[0], material_output_input))
 
 image_file_output.file_slots[0].path = 'albedo_'
+image_file_output.format.file_format = 'OPEN_EXR'
 bpy.ops.render.render(animation=True)
 
 # for i in range(0, VIEWS):
@@ -342,6 +384,7 @@ for material in materials:
     material_links.append(shader_links.new(roughness.outputs[0], material_output_input))
 
 image_file_output.file_slots[0].path = 'roughness_'
+image_file_output.format.file_format = 'OPEN_EXR'
 bpy.ops.render.render(animation=True)
 
 # for i in range(0, VIEWS):
@@ -411,6 +454,7 @@ for material in materials:
 #     material_links.append(shader_links.new(viewdir.outputs[1], material_output_input))
 
 # image_file_output.file_slots[0].path = 'viewdir_'
+# image_file_output.format.file_format = 'OPEN_EXR'
 # bpy.ops.render.render(animation=True)
 
 # # for i in range(0, VIEWS):
