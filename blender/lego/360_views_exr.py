@@ -17,10 +17,10 @@ def listify_matrix(matrix):
 DEBUG = False
 
 TAG = "0000"
-NUM_VIEWS = 1
-NUM_LIGHT_POSITIONS = 1
+NUM_VIEWS = 8
+NUM_LIGHT_POSITIONS = 32
 RESOLUTION = 800
-RESULTS_PATH = f"images_{NUM_VIEWS:03d}_L{NUM_LIGHT_POSITIONS:03d}"
+RESULTS_PATH = f"lego_{NUM_VIEWS:03d}_L{NUM_LIGHT_POSITIONS:03d}"
 COLOR_DEPTH = 8
 FORMAT = "PNG"
 RANDOM_VIEWS = False
@@ -39,8 +39,6 @@ POINTS = np.array([[-1.0,  1.0, 0.0], [-1.0, -1.0, 0.0],
 scene = bpy.context.scene
 materials = bpy.data.materials
 save_path = bpy.path.abspath(f"//{RESULTS_PATH}")
-
-stepsize = 360.0 / NUM_VIEWS
 rotation_mode = "XYZ"
 
 os.makedirs(save_path, exist_ok=True)
@@ -56,7 +54,7 @@ nodes = tree.nodes
 
 
 scene.frame_start = 0
-scene.frame_end = NUM_VIEWS - 1
+scene.frame_end = NUM_VIEWS * NUM_LIGHT_POSITIONS - 1
 scene.render.filepath = os.path.join(save_path, "image_")
 
 # Add passes for additionally dumping albedo and normals.
@@ -168,7 +166,7 @@ else:
     # n = 2
     # m = 4
     # theta = np.linspace(0, np.pi / 2, n + 1)[:-1] + 1e-3
-    # phi = np.linspace(0, 2 * np.pi, m)
+    # phi = np.linspace(0, 2 * np.pi, m + 1)[:-1]
     theta, phi = np.meshgrid(theta, phi)
     theta = theta.flatten()
     phi = phi.flatten()
