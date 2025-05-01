@@ -7,7 +7,7 @@ import argparse
 from tqdm import tqdm
 import OpenImageIO as oiio
 
-gbuffers = ['albedo', 'alpha', 'depth', 'normal', 'position', 'render', 'roughness', 'viewdir']
+gbuffers = ['alpha', 'depth', 'normal', 'position', 'render', 'albedo', 'roughness', 'viewdir']
 exts =     [  '.exr',  '.exr',  '.exr',   '.exr',     '.exr',   '.exr',      '.exr',    '.exr']
 
 parser = argparse.ArgumentParser()

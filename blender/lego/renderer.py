@@ -249,10 +249,8 @@ def main():
 
 
     # Render
-    # buffer_names = ["brdf", "albedo", "roughness"]
-    buffer_names = ["brdf"]
-    # render_names = ["render", "albedo", "roughness"]
-    render_names = ["render"]
+    buffer_names = ["brdf", "albedo", "roughness"]
+    render_names = ["render", "albedo", "roughness"]
 
     gbuffer_flag = False
 
