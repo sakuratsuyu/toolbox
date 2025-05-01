@@ -1,3 +1,5 @@
+# Print the node tree of a material of an object
+
 import bpy
 
 def print_indent(depth):
@@ -53,7 +55,6 @@ def parse_group(group, depth):
         if len(input.links) > 0:
             assert(len(input.links) == 1)
             parse_node(input.links[0].from_node, depth=depth + 1)
-
 
 def parse_node(node, depth):
     print_indent(depth)
@@ -148,10 +149,9 @@ def parse_node(node, depth):
         case _:
             print_indent(depth)
             print("NODE TYPE", node.type, "NOT IMPLEMENTED YET")
-            
+
 
 obj = bpy.data.objects['Brick_flat_02*08.002']
-
 material_slots = obj.material_slots
 
 for material_slot in material_slots:
