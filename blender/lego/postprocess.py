@@ -1,130 +1,85 @@
-import argparse
 import os
-import glob
+os.environ["OPENCV_IO_ENABLE_OPENEXR"] = "1"
 import cv2
+import json
 import numpy as np
-from dataclasses import dataclass
+import argparse
 from tqdm import tqdm
+import OpenImageIO as oiio
 
-@dataclass
-class Material:
-    name: str
-    color: np.ndarray
-    roughness: float
-    metallic: float
+gbuffers = ['albedo', 'alpha', 'depth', 'normal', 'position', 'render', 'roughness', 'viewdir']
+exts =     [  '.exr',  '.exr',  '.exr',   '.exr',     '.exr',   '.exr',      '.exr',    '.exr']
 
-MATERIALS = [
-    Material(
-        name='Sand',
-        color=np.array([0.530, 0.435, 0.248]),
-        roughness=0.0,
-        metallic=0.0
-    ),
-    Material(
-        name='Brown',
-        color=np.array([0.098, 0.041, 0.020]),
-        roughness=0.0,
-        metallic=0.0
-    ),
-    Material(
-        name='Light_brown',
-        color=np.array([0.201, 0.080, 0.034]),
-        roughness=0.0,
-        metallic=0.0
-    ),
-    Material(
-        name='Black',
-        color=np.array([0.003, 0.003, 0.003]),
-        roughness=0.0,
-        metallic=0.0
-    ),
-    Material(
-        name='Gray',
-        color=np.array([0.296, 0.323, 0.392]),
-        roughness=0.0,
-        metallic=0.0
-    ),
-    Material(
-        name='Yellow',
-        color=np.array([0.799, 0.503, 0.030]),
-        roughness=0.0,
-        metallic=0.0
-    ),
-    Material(
-        name='tranparent',
-        color=np.array([0.973, 0.973, 0.973]),
-        roughness=0.141,
-        metallic=0.800
-    ),
-    Material(
-        name='RubberBand',
-        color=np.array([0.042, 0.042, 0.042]),
-        roughness=0.775,
-        metallic=0.800
-    ),
-    Material(
-        name='Red_Glass',
-        color=np.array([1.000, 0.015, 0.003]),
-        roughness=0.141,
-        metallic=0.800
-    )
-]
+parser = argparse.ArgumentParser()
+parser.add_argument('--image_path', type=str, required=True)
+args = parser.parse_args()
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--image_path', type=str, required=True)
-    args = parser.parse_args()
+base = args.image_path
 
-    material_index_images = glob.glob(os.path.join(args.image_path, '*', '*_material_index_output_0000.png'))
-    material_index_images.sort()
-    dirs = [os.path.dirname(image) for image in material_index_images]
+with open(os.path.join(base, "transforms.json")) as json_file:
+    contents = json.load(json_file)
 
-    for index, dir in tqdm(enumerate(dirs), total=len(dirs)):
+frames = contents["frames"]
 
-        index = int(os.path.basename(material_index_images[index])[:3])
+for cnt in tqdm(range(len(frames))):
+    frame = frames[cnt]
+    dir_path, file_name = frame["file_path"].split("\\")
+    i, j = int(file_name.split("_L")[0]), int(file_name.split("_L")[1])
+    os.makedirs(os.path.join(base, dir_path), exist_ok=True)
 
-        alpha = cv2.imread(os.path.join(dir, f'{index:03d}' + '.png'), cv2.IMREAD_UNCHANGED)[..., 3] / 255.0
+    alpha_path = os.path.join(base, f"alpha_{cnt:04d}.exr")
+    alpha_input_file = oiio.ImageInput.open(alpha_path)
+    spec = alpha_input_file.spec()
+    alpha = np.asarray(alpha_input_file.read_image(format=oiio.FLOAT)).reshape(spec.height, spec.width, spec.nchannels)
+    alpha = np.where(alpha > 0.5, 1.0, 0.0).astype(np.float32)
+    alpha_input_file.close()
+    H, W, _ = alpha.shape
+    alpha_output_file = oiio.ImageOutput.create(alpha_path)
+    spec = oiio.ImageSpec(W, H, 3, oiio.FLOAT)
+    alpha_output_file.open(alpha_path, spec)
+    alpha_output_file.write_image(alpha.repeat(3, axis=-1))
+    alpha_output_file.close()
 
-        # Map material index to corresponding brdf
+    depth_path = os.path.join(base, f"depth_{cnt:04d}.exr")
+    depth_input_file = oiio.ImageInput.open(depth_path)
+    spec = depth_input_file.spec()
+    depth = np.asarray(depth_input_file.read_image(format=oiio.FLOAT)).reshape(spec.height, spec.width, spec.nchannels)
+    depth_input_file.close()
+    H, W, _ = depth.shape
+    depth_output_file = oiio.ImageOutput.create(depth_path)
+    spec = oiio.ImageSpec(W, H, 3, oiio.FLOAT)
+    depth_output_file.open(depth_path, spec)
+    depth_output_file.write_image(depth.repeat(3, axis=-1))
+    depth_output_file.close()
 
-        image = cv2.imread(os.path.join(dir, f'{index:03d}' + '_material_index_output_0000.png'), cv2.IMREAD_UNCHANGED)[:, :, :3]
+    position_path = os.path.join(base, f"position_{cnt:04d}.exr")
+    if os.path.exists(position_path):
+        position = cv2.imread(position_path, cv2.IMREAD_UNCHANGED)
+        position = cv2.cvtColor(position, cv2.COLOR_BGR2RGB)
 
-        # unique_values = np.unique(image)
-        # unique_values.sort()
-        # value_to_index = {value: index for index, value in enumerate(unique_values)}
-        # remapped_image = np.vectorize(lambda value: value_to_index[value])(image)[:, :, 0]
+        loc = np.array(frame["transform_matrix"])[:3, 3]
 
-        remapped_image = image[:, :, 0]
+        viewdir = loc - position
+        viewdir /= np.linalg.norm(viewdir, axis=-1, keepdims=True)
+        viewdir = viewdir * alpha
+        viewdir = np.concatenate((viewdir[..., [2, 1, 0]], alpha), axis=-1).astype(np.float32)
 
-        albedo_image = np.zeros((image.shape[0], image.shape[1], 3), dtype=np.float16)
-        roughness_image = np.zeros((image.shape[0], image.shape[1]), dtype=np.float16)
-        metallic_image = np.zeros((image.shape[0], image.shape[1]), dtype=np.float16)
+        cv2.imwrite(os.path.join(base, f"viewdir_{cnt:04d}.exr"), viewdir)
 
-        for (i, material) in enumerate(MATERIALS):
-            mask = (remapped_image == i + 1)
-            albedo_image[mask] = material.color
-            roughness_image[mask] = material.roughness
-            metallic_image[mask] = material.metallic
-        
-        # remap [0, 1] to [0.3, 1]
-        albedo_image = (albedo_image * 0.7 + 0.3) * alpha[..., None]
-        roughness_image = (roughness_image * 0.7 + 0.3) * alpha
-        metallic_image = (metallic_image * 0.7 + 0.3) * alpha
+    for gbuffer, ext in zip(gbuffers, exts):
+        src_path = os.path.join(base, f"{gbuffer}_{cnt:04d}{ext}")
+        dst_path = os.path.join(base, dir_path, file_name + "_" + gbuffer + ext)
+        if os.path.exists(src_path):
+            input = oiio.ImageInput.open(src_path)
+            spec = input.spec()
+            img = np.asarray(input.read_image(format=oiio.FLOAT)).reshape(spec.height, spec.width, spec.nchannels)
+            input.close()
+            img = img[..., :3] * alpha
 
-        albedo_image = (albedo_image * 255).astype(np.uint8)
-        roughness_image = (roughness_image * 255).astype(np.uint8)
-        metallic_image = (metallic_image * 255).astype(np.uint8)
+            output = oiio.ImageOutput.create(dst_path)
+            spec = oiio.ImageSpec(spec.width, spec.height, 3, oiio.FLOAT)
+            output.open(dst_path, spec)
+            output.write_image(img)
+            output.close()
 
-        albedo_image = cv2.cvtColor(albedo_image, cv2.COLOR_RGB2BGR)
-        cv2.imwrite(os.path.join(dir, f'{index:03d}_albedo.png'), albedo_image)
-        cv2.imwrite(os.path.join(dir, f'{index:03d}_roughness.png'), roughness_image)
-        cv2.imwrite(os.path.join(dir, f'{index:03d}_metallic.png'), metallic_image)
-
-        # os.remove(os.path.join(dir, f'{index:03d}_material_index_output_0000.png'))
-
-        # Rename normal output
-        if os.path.exists(os.path.join(dir, f'{index:03d}_normal_output_0000.png')):
-            os.rename(os.path.join(dir, f'{index:03d}_normal_output_0000.png'), os.path.join(dir, f'{index:03d}_normal.png'))
-
-if __name__ == "__main__":
-    main()
+            os.remove(src_path)
